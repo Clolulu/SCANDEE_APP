@@ -1,40 +1,27 @@
 import Link from 'next/link';
+import { useRouter } from 'next/router';
+import { useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { useAuth } from '../lib/useAuth';
 
 export default function Home() {
-  const { user } = useAuth();
+  const router = useRouter();
+  const { user, loading } = useAuth();
 
-  if (user?.role === 'tourist') {
-    return (
-      <Layout title="Scandee PWA">
-        <div className="space-y-6 rounded-3xl bg-white p-6 shadow-sm">
-          <div className="space-y-3">
-            <p className="text-sm uppercase tracking-[0.2em] text-sky-600">QR-Driven Ordering</p>
-            <h2 className="text-3xl font-semibold sm:text-4xl">Order from local vendors instantly</h2>
-            <p className="max-w-2xl text-slate-600">Scan a vendor QR code, browse their menu, add items to your cart, checkout securely, and pick up with a verification PIN.</p>
-          </div>
-          <Link href="/customer/home" className="inline-block rounded-2xl bg-sky-600 px-5 py-4 text-white shadow hover:bg-sky-700">Start Scanning QR Codes</Link>
-        </div>
-      </Layout>
-    );
-  }
+  useEffect(() => {
+    if (loading) return;
+    if (!user) return;
+    if (user.role === 'vendor') {
+      router.replace('/vendor/dashboard');
+    } else if (user.role === 'admin') {
+      // admin page is served outside the Next router
+      window.location.href = '/admin';
+    } else {
+      router.replace('/customer/home');
+    }
+  }, [user, loading, router]);
 
-  if (user?.role === 'vendor') {
-    return (
-      <Layout title="Scandee PWA">
-        <div className="space-y-6 rounded-3xl bg-white p-6 shadow-sm">
-          <div className="space-y-3">
-            <p className="text-sm uppercase tracking-[0.2em] text-sky-600">Vendor Dashboard</p>
-            <h2 className="text-3xl font-semibold sm:text-4xl">Manage Your Shop</h2>
-            <p className="max-w-2xl text-slate-600">Add products to your menu, manage incoming orders, verify pickup PINs, and share your store QR code with customers.</p>
-          </div>
-          <Link href="/vendor/dashboard" className="inline-block rounded-2xl bg-sky-600 px-5 py-4 text-white shadow hover:bg-sky-700">Go to Dashboard</Link>
-        </div>
-      </Layout>
-    );
-  }
-
+  // Public landing for unauthenticated visitors
   return (
     <Layout title="Scandee PWA">
       <section className="space-y-6 rounded-3xl bg-white p-6 shadow-sm">

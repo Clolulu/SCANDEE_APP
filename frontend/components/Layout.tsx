@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from '../lib/useAuth';
 import { FloatingCartButton } from './FloatingCartButton';
+import { VendorOrderNotifications } from './VendorOrderNotifications';
 
 interface LayoutProps {
   children: ReactNode;
@@ -27,7 +28,8 @@ export function Layout({ children, title }: LayoutProps) {
             <Link href="/" className="text-lg font-semibold text-slate-900">Scandee</Link>
             {user ? <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">{roleLabel}</span> : null}
           </div>
-          <nav className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+          <div className="flex flex-wrap items-center gap-3">
+            <nav className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
             {!user && (
               <>
                 <Link href="/" className="hover:text-slate-900">Home</Link>
@@ -63,8 +65,10 @@ export function Layout({ children, title }: LayoutProps) {
             )}
           </nav>
         </div>
+      </div>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
+      {user?.role === 'vendor' ? <VendorOrderNotifications /> : null}
       <FloatingCartButton />
       <footer className="border-t bg-white py-4 text-center text-sm text-slate-500">
         {title || 'Mobile first marketplace for customers and vendors.'}

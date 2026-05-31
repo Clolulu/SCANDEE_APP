@@ -1,13 +1,15 @@
 import useSWR from 'swr';
+import { useRouter } from 'next/router';
 import { api } from '../../../lib/api';
 import { Layout } from '../../../components/Layout';
 import { ProtectedPage } from '../../../components/ProtectedPage';
 import { useAuth } from '../../../lib/useAuth';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 const fetcher = (url: string) => api.get(url).then((r) => r.data);
 
 export default function VendorOrders() {
+  const router = useRouter();
   const { loading } = useAuth();
   const { data: orders, mutate } = useSWR(!loading ? '/store/orders/' : null, fetcher, {
     refreshInterval: 5000,
@@ -46,12 +48,30 @@ export default function VendorOrders() {
     setPins((current) => ({ ...current, [orderId]: value }));
   };
 
+  const highlightedOrderId = Number(router.query.highlight || 0);
+
+  useEffect(() => {
+    if (!orders || !highlightedOrderId) {
+      return;
+    }
+    const element = document.getElementById(`order-card-${highlightedOrderId}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [orders, highlightedOrderId]);
+
   return (
     <ProtectedPage requiredRole="vendor">
       <Layout title="Vendor Orders">
       <div className="space-y-6">
-        {orders?.map((o: any) => (
-          <div key={o.id} className="rounded-3xl bg-white p-4 shadow-sm">
+        {orders?.map((o: any) => {
+          const isHighlighted = o.id === highlightedOrderId;
+          return (
+            <div
+              key={o.id}
+              id={`order-card-${o.id}`}
+              className={`rounded-3xl bg-white p-4 shadow-sm transition ${isHighlighted ? 'ring-2 ring-sky-500 bg-sky-50' : ''}`}
+            >
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="font-semibold">Order #{o.id}</p>
@@ -128,7 +148,7 @@ export default function VendorOrders() {
               )}
             </div>
           </div>
-        ))}
+        )})}
       </div>
       </Layout>
     </ProtectedPage>

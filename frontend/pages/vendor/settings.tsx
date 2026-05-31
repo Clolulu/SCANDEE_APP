@@ -74,6 +74,7 @@ export default function VendorSettingsPage() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [notificationSoundEnabled, setNotificationSoundEnabled] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -307,6 +308,29 @@ export default function VendorSettingsPage() {
                 </label>
               </div>
             </section>
+
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
+              <h3 className="text-lg font-semibold text-slate-900">Notifications</h3>
+              <p className="mt-2 text-sm text-slate-500">Enable sound alerts for new incoming orders.</p>
+
+              <div className="mt-6 flex items-center gap-3 rounded-3xl bg-white p-4 shadow-sm">
+                <label className="flex cursor-pointer items-center gap-3 text-sm font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={notificationSoundEnabled}
+                    onChange={(e) => {
+                      const enabled = e.target.checked;
+                      setNotificationSoundEnabled(enabled);
+                      if (typeof window !== 'undefined') {
+                        window.localStorage.setItem('vendor_notifications_sound_enabled', String(enabled));
+                      }
+                    }}
+                    className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                  />
+                  Play sound for new orders
+                </label>
+              </div>
+            </div>
 
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
               <h3 className="text-lg font-semibold text-slate-900">Change password</h3>
