@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { Html5Qrcode } from 'html5-qrcode';
+import { useCart } from '../lib/cart';
 
 interface QRScannerProps {
   onClose?: () => void;
@@ -8,9 +9,11 @@ interface QRScannerProps {
 
 export function QRScanner({ onClose }: QRScannerProps) {
   const router = useRouter();
+  const { cart, clear } = useCart();
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [permission, setPermission] = useState<'pending' | 'granted' | 'denied'>('pending');
+  const [pendingStorePath, setPendingStorePath] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const deviceIdRef = useRef<string | null>(null);
   const isInitializingRef = useRef(false);
@@ -98,6 +101,12 @@ export function QRScanner({ onClose }: QRScannerProps) {
 
       if (storeMatch && storeMatch[1]) {
         const vendorId = storeMatch[1];
+        const vendorIdNumber = Number(vendorId);
+        if (cart.vendorId && cart.vendorId !== vendorIdNumber && cart.items.length > 0) {
+          setPendingStorePath(`/store/${vendorId}`);
+          return;
+        }
+
         router.push(`/store/${vendorId}`);
       } else {
         setError('Invalid QR code. Please scan a valid Scandee vendor QR code.');
@@ -286,6 +295,40 @@ export function QRScanner({ onClose }: QRScannerProps) {
           </div>
         )}
       </div>
+
+      {pendingStorePath ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 py-6">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl shadow-slate-900/20">
+            <h3 className="text-xl font-semibold">Start a new order?</h3>
+            <p className="mt-3 text-sm text-slate-600">
+              You already have items from another vendor in your cart. Starting a new order will clear your current cart and take you to the new shop.
+            </p>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button
+                onClick={async () => {
+                  setPendingStorePath(null);
+                  setError(null);
+                  setIsScanning(false);
+                  await restartScanning();
+                }}
+                className="rounded-2xl border border-slate-300 px-4 py-3 text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (!pendingStorePath) return;
+                  clear();
+                  router.push(pendingStorePath);
+                }}
+                className="rounded-2xl bg-sky-600 px-4 py-3 text-white hover:bg-sky-700"
+              >
+                Start New Order
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1,8 +1,9 @@
 from decimal import Decimal
+from datetime import datetime
 
 from django.conf import settings
 from rest_framework import serializers
-from .models import VendorProfile, Product, Order, OrderItem
+from .models import VendorProfile, Product, Order, OrderItem, Payout
 from apps.accounts.serializers import UserSerializer
 
 class VendorProfileSerializer(serializers.ModelSerializer):
@@ -14,6 +15,7 @@ class VendorProfileSerializer(serializers.ModelSerializer):
     banner_image = serializers.ImageField(required=False, allow_null=True)
     logo_image_url = serializers.SerializerMethodField(read_only=True)
     banner_image_url = serializers.SerializerMethodField(read_only=True)
+    promptpay_qr_image_url = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = VendorProfile
@@ -33,6 +35,7 @@ class VendorProfileSerializer(serializers.ModelSerializer):
             'banner_image',
             'banner_image_url',
             'qr_code',
+            'promptpay_qr_image_url',
             'created_at',
         )
 
@@ -49,6 +52,86 @@ class VendorProfileSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         url = obj.banner_image.url
         return request.build_absolute_uri(url) if request else url
+
+    def get_promptpay_qr_image_url(self, obj):
+        if not obj.promptpay_qr_image:
+            return None
+        request = self.context.get('request')
+        url = obj.promptpay_qr_image.url
+        return request.build_absolute_uri(url) if request else url
+
+    def validate_business_hours(self, value):
+        if not value:
+            return ''
+
+        parsed = self._parse_business_hours(value)
+        if parsed is None:
+            raise serializers.ValidationError('Business hours format is invalid. Use HH:MM - HH:MM.')
+
+        open_time, close_time = parsed
+        if close_time <= open_time:
+            raise serializers.ValidationError('Closing time must be later than opening time.')
+
+        return f'{open_time.strftime("%H:%M")}-{close_time.strftime("%H:%M")}'
+
+    def _parse_business_hours(self, value):
+        try:
+            parts = [part.strip() for part in value.split('-')]
+            if len(parts) != 2:
+                return None
+            open_time = self._parse_time(parts[0])
+            close_time = self._parse_time(parts[1])
+            if open_time is None or close_time is None:
+                return None
+            return open_time, close_time
+        except Exception:
+            return None
+
+    def _parse_time(self, value):
+        if not value:
+            return None
+        text = value.strip().upper().replace(' ', '')
+        formats = ['%H:%M', '%I:%M%p']
+        for fmt in formats:
+            try:
+                return datetime.strptime(text, fmt).time()
+            except ValueError:
+                continue
+        return None
+
+class VendorProfilePrivateSerializer(VendorProfileSerializer):
+    bank_name = serializers.CharField(required=False, allow_blank=True)
+    bank_account_holder = serializers.CharField(required=False, allow_blank=True)
+    bank_account_number = serializers.CharField(required=False, allow_blank=True)
+    promptpay_id = serializers.CharField(required=False, allow_blank=True)
+    promptpay_type = serializers.CharField(required=False, allow_blank=True)
+    promptpay_qr_image = serializers.ImageField(required=False, allow_null=True)
+    account_name = serializers.CharField(source='bank_account_holder', read_only=True)
+    account_number = serializers.CharField(source='bank_account_number', read_only=True)
+    payout_schedule = serializers.ChoiceField(choices=VendorProfile.PAYOUT_SCHEDULE_CHOICES, required=False)
+    available_balance = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    pending_balance = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    lifetime_earnings = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    last_payout_at = serializers.DateTimeField(read_only=True)
+    next_payout_at = serializers.DateTimeField(read_only=True)
+
+    class Meta(VendorProfileSerializer.Meta):
+        fields = VendorProfileSerializer.Meta.fields + (
+            'bank_name',
+            'bank_account_holder',
+            'bank_account_number',
+            'account_name',
+            'account_number',
+            'promptpay_id',
+            'promptpay_type',
+            'promptpay_qr_image',
+            'payout_schedule',
+            'available_balance',
+            'pending_balance',
+            'lifetime_earnings',
+            'last_payout_at',
+            'next_payout_at',
+        )
 
 class ProductSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField(read_only=True)
@@ -74,15 +157,51 @@ class OrderItemSerializer(serializers.ModelSerializer):
         fields = ('id', 'product', 'product_id', 'quantity', 'subtotal')
         read_only_fields = ('subtotal',)
 
+class PayoutSerializer(serializers.ModelSerializer):
+    vendor_id = serializers.IntegerField(source='vendor.user_id', read_only=True)
+    vendor_name = serializers.CharField(source='vendor.shop_name', read_only=True)
+    account_name = serializers.CharField(source='bank_account_holder', read_only=True)
+    account_number = serializers.CharField(source='bank_account_number', read_only=True)
+    promptpay_id = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = Payout
+        fields = (
+            'id',
+            'vendor_id',
+            'vendor_name',
+            'reference_number',
+            'amount',
+            'status',
+            'payout_method',
+            'bank_name',
+            'bank_account_holder',
+            'bank_account_number',
+            'destination_account',
+            'transfer_reference',
+            'transfer_status',
+            'account_name',
+            'account_number',
+            'promptpay_id',
+            'scheduled_at',
+            'processed_at',
+            'notes',
+            'created_at',
+        )
+
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True)
     tourist = UserSerializer(read_only=True)
+    vendor_name = serializers.CharField(source='vendor.shop_name', read_only=True)
     order_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     service_fee = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     charge_amount = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     gateway_fee = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     vendor_payout = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     platform_profit = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    pickup_pin = serializers.CharField(source='pin_code', read_only=True)
+    prepared_at = serializers.DateTimeField(read_only=True)
+    completed_at = serializers.DateTimeField(read_only=True)
 
     class Meta:
         model = Order
@@ -90,6 +209,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'id',
             'tourist',
             'vendor',
+            'vendor_name',
             'order_total',
             'service_fee',
             'charge_amount',
@@ -98,7 +218,9 @@ class OrderSerializer(serializers.ModelSerializer):
             'platform_profit',
             'payment_status',
             'order_status',
-            'pin_code',
+            'pickup_pin',
+            'prepared_at',
+            'completed_at',
             'items',
             'created_at',
         )
@@ -112,7 +234,10 @@ class OrderSerializer(serializers.ModelSerializer):
             'platform_profit',
             'payment_status',
             'order_status',
+            'prepared_at',
+            'completed_at',
             'pin_code',
+            'confirmation_pin_hash',
         )
 
     def validate(self, attrs):
@@ -162,5 +287,4 @@ class OrderSerializer(serializers.ModelSerializer):
         )
         for item_data in items_data:
             OrderItem.objects.create(order=order, product=item_data['product'], quantity=item_data['quantity'])
-        order.generate_pin()
         return order

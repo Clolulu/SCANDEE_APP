@@ -25,6 +25,8 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     email = models.EmailField(unique=True)
     full_name = models.CharField(max_length=255, blank=True)
+    phone_number = models.CharField(max_length=30, blank=True)
+    profile_image = models.ImageField(upload_to='profiles/', blank=True, null=True)
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='tourist')
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)

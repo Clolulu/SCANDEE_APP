@@ -1,5 +1,6 @@
 import requests
 from django.conf import settings
+from django.utils import timezone
 from rest_framework import status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -26,6 +27,7 @@ class CreateChargeView(APIView):
             'description': f'Order {order.id} payment',
         }
         if not settings.OMISE_SECRET_KEY:
+            # TODO: Replace with real Omise charge later.
             fake_charge_id = f'demo-charge-{order.id}'
             Transaction.objects.update_or_create(
                 order=order,
@@ -35,10 +37,8 @@ class CreateChargeView(APIView):
                     'amount': order.charge_amount,
                 },
             )
-            order.payment_status = 'paid'
-            order.order_status = 'confirmed'
-            order.save(update_fields=['payment_status', 'order_status'])
-            return Response({'charge': {'id': fake_charge_id, 'status': 'successful', 'amount': int(order.charge_amount * 100)}})
+            order.mark_paid()
+            return Response({'charge': {'id': fake_charge_id, 'status': 'successful', 'amount': int(order.charge_amount * 100)}, 'pickup_pin': order.pin_code})
 
         response = requests.post(
             'https://api.omise.co/charges',
@@ -55,10 +55,13 @@ class CreateChargeView(APIView):
                     'amount': order.charge_amount,
                 },
             )
-            order.payment_status = 'paid' if data['status'] == 'successful' else 'failed'
-            order.order_status = 'confirmed' if data['status'] == 'successful' else 'created'
+            if data['status'] == 'successful':
+                order.mark_paid()
+                return Response({'charge': data, 'pickup_pin': order.pin_code})
+            order.payment_status = 'FAILED'
+            order.order_status = 'FAILED'
             order.save(update_fields=['payment_status', 'order_status'])
-            return Response({'charge': data})
+            return Response({'charge': data}, status=status.HTTP_400_BAD_REQUEST)
         return Response({'detail': data}, status=status.HTTP_400_BAD_REQUEST)
 
 class OmiseWebhookView(APIView):
@@ -74,9 +77,12 @@ class OmiseWebhookView(APIView):
             order_id = charge['description'].split()[-2]
             order = Order.objects.filter(id=order_id).first()
             if order:
-                order.payment_status = 'paid' if charge['status'] == 'successful' else 'failed'
-                order.order_status = 'confirmed' if charge['status'] == 'successful' else 'created'
-                order.save(update_fields=['payment_status', 'order_status'])
+                if charge['status'] == 'successful':
+                    order.mark_paid()
+                else:
+                    order.payment_status = 'FAILED'
+                    order.order_status = 'FAILED'
+                    order.save(update_fields=['payment_status', 'order_status'])
                 Transaction.objects.update_or_create(
                     order=order,
                     defaults={

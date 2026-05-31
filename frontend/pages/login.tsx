@@ -4,9 +4,6 @@ import { api, parseApiError } from '../lib/api';
 import { useAuth } from '../lib/useAuth';
 import { Layout } from '../components/Layout';
 
-const DEMO_CUSTOMER = { email: 'buyer@test.com', password: 'test123' };
-const DEMO_VENDOR = { email: 'vendor@test.com', password: 'test123' };
-
 export default function Login() {
   const router = useRouter();
   const { login } = useAuth();
@@ -70,30 +67,11 @@ export default function Login() {
     await loginUser(form.email.trim(), form.password);
   };
 
-  const handleQuickLogin = async (credentials: { email: string; password: string }) => {
-    setForm(credentials);
-    await loginUser(credentials.email, credentials.password);
-  };
-
   return (
-    <Layout title="Customer Login">
+    <Layout title="Login">
       <div className="mx-auto max-w-md rounded-3xl bg-white p-6 shadow-sm">
-        <h2 className="text-2xl font-semibold">Customer Login</h2>
+        <h2 className="text-2xl font-semibold">Login</h2>
         <p className="mt-2 text-slate-600">Login as a customer or vendor to continue browsing and managing your shop.</p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <button type="button" onClick={() => handleQuickLogin(DEMO_CUSTOMER)} className="rounded-2xl bg-slate-100 px-4 py-3 text-slate-900 hover:bg-slate-200">
-            Customer Demo
-          </button>
-          <button type="button" onClick={() => handleQuickLogin(DEMO_VENDOR)} className="rounded-2xl bg-slate-100 px-4 py-3 text-slate-900 hover:bg-slate-200">
-            Vendor Demo
-          </button>
-        </div>
-        <div className="mt-6 rounded-3xl bg-slate-50 p-4 text-sm text-slate-600">
-          <p className="font-semibold">Customer Demo:</p>
-          <p>buyer@test.com / test123</p>
-          <p className="mt-3 font-semibold">Vendor Demo:</p>
-          <p>vendor@test.com / test123</p>
-        </div>
         <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
           <label className="block space-y-2">
             <span>Email</span>

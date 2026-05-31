@@ -52,9 +52,7 @@ export default function CreateProduct() {
       if (imageFile) {
         formData.append('image', imageFile);
       }
-      await api.post('/store/products/', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      await api.post('/store/products/', formData);
       router.push('/vendor/products');
     } catch (err: any) {
       setError(err?.response?.data?.detail || 'Unable to create product');

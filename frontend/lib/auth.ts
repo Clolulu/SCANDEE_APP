@@ -41,6 +41,11 @@ export const saveSession = (access: string, refresh: string, user: AuthUser) => 
   window.localStorage.setItem(USER_KEY, JSON.stringify(user));
 };
 
+export const saveUser = (user: AuthUser) => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(USER_KEY, JSON.stringify(user));
+};
+
 export const clearSession = () => {
   if (typeof window === 'undefined') return;
   window.localStorage.removeItem(ACCESS_TOKEN_KEY);

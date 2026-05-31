@@ -1,6 +1,8 @@
 import React, { ReactNode } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { useAuth } from '../lib/useAuth';
+import { FloatingCartButton } from './FloatingCartButton';
 
 interface LayoutProps {
   children: ReactNode;
@@ -8,8 +10,14 @@ interface LayoutProps {
 }
 
 export function Layout({ children, title }: LayoutProps) {
+  const router = useRouter();
   const { user, logout } = useAuth();
   const roleLabel = user?.role === 'vendor' ? 'Vendor' : user?.role === 'admin' ? 'Admin' : 'Customer';
+
+  const handleLogout = async () => {
+    logout();
+    await router.replace('/login');
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -32,13 +40,13 @@ export function Layout({ children, title }: LayoutProps) {
                 <Link href="/customer/home" className="hover:text-slate-900">Scan QR</Link>
                 <Link href="/orders" className="hover:text-slate-900">My Orders</Link>
                 <Link href="/account" className="hover:text-slate-900">Account</Link>
-                <button onClick={logout} className="rounded-full border border-slate-200 px-3 py-1 hover:bg-slate-100">Logout</button>
+                <button onClick={handleLogout} className="rounded-full border border-slate-200 px-3 py-1 hover:bg-slate-100">Logout</button>
               </>
             )}
             {user?.role === 'admin' && (
               <>
                 <Link href="/admin" className="hover:text-slate-900">Admin</Link>
-                <button onClick={logout} className="rounded-full border border-slate-200 px-3 py-1 hover:bg-slate-100">Logout</button>
+                <button onClick={handleLogout} className="rounded-full border border-slate-200 px-3 py-1 hover:bg-slate-100">Logout</button>
               </>
             )}
             {user?.role === 'vendor' && (
@@ -49,13 +57,15 @@ export function Layout({ children, title }: LayoutProps) {
                 <Link href="/vendor/qr" className="hover:text-slate-900">QR</Link>
                 <Link href="/vendor/shop" className="hover:text-slate-900">Shop Profile</Link>
                 <Link href="/vendor/settings" className="hover:text-slate-900">Account Settings</Link>
-                <button onClick={logout} className="rounded-full border border-slate-200 px-3 py-1 hover:bg-slate-100">Logout</button>
+                <Link href="/vendor/payouts" className="hover:text-slate-900">Payouts</Link>
+                <button onClick={handleLogout} className="rounded-full border border-slate-200 px-3 py-1 hover:bg-slate-100">Logout</button>
               </>
             )}
           </nav>
         </div>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
+      <FloatingCartButton />
       <footer className="border-t bg-white py-4 text-center text-sm text-slate-500">
         {title || 'Mobile first marketplace for customers and vendors.'}
       </footer>

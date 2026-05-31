@@ -5,6 +5,7 @@ from django.conf.urls.static import static
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
+from apps.marketplace.views import VendorOrdersView
 
 schema_view = get_schema_view(
     openapi.Info(
@@ -20,6 +21,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/auth/', include('apps.accounts.urls')),
     path('api/store/', include('apps.marketplace.urls')),
+    path('api/orders/', include('apps.marketplace.order_urls')),
+    path('api/vendor/orders/', VendorOrdersView.as_view(), name='vendor-orders'),
     path('api/payments/', include('apps.payments.urls')),
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
 ]

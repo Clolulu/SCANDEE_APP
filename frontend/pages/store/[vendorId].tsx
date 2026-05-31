@@ -8,22 +8,69 @@ import { useMemo } from 'react';
 
 const fetcher = (url: string) => api.get(url).then((res) => res.data);
 
+const formatBusinessHours = (value: string) => {
+  const parseTimeValue = (text: string) => {
+    const normalized = text.trim().toUpperCase();
+    const ampmMatch = normalized.match(/^([0-9]{1,2}:[0-9]{2})\s*(AM|PM)$/);
+    if (ampmMatch) {
+      const [, time, period] = ampmMatch;
+      const [hour, minute] = time.split(':').map(Number);
+      const hour24 = period === 'PM' ? (hour % 12) + 12 : hour % 12;
+      return `${hour24.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+    }
+    const twentyFourMatch = normalized.match(/^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/);
+    if (twentyFourMatch) {
+      const [, hour, minute] = twentyFourMatch;
+      return `${hour.padStart(2, '0')}:${minute}`;
+    }
+    return null;
+  };
+
+  const parts = value.split('-').map((part) => part.trim());
+  if (parts.length !== 2) {
+    return value;
+  }
+
+  const opening = parseTimeValue(parts[0]);
+  const closing = parseTimeValue(parts[1]);
+  if (!opening || !closing) {
+    return value;
+  }
+
+  const [openHour, openMinute] = opening.split(':').map(Number);
+  const [closeHour, closeMinute] = closing.split(':').map(Number);
+  const openDate = new Date(1970, 0, 1, openHour, openMinute);
+  const closeDate = new Date(1970, 0, 1, closeHour, closeMinute);
+  return `${openDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} - ${closeDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
+};
+
 export default function StorePage() {
   const router = useRouter();
+  const { user } = useAuth();
   const { vendorId } = router.query;
   const vendorIdNumber = typeof vendorId === 'string' ? Number(vendorId) : null;
   const { data: vendor, error: vendorError } = useSWR(vendorId ? `/store/vendor/${vendorId}/` : null, fetcher);
   const { data: products, error: productsError } = useSWR(vendorId ? `/store/products/?vendor=${vendorId}` : null, fetcher);
-  const { user } = useAuth();
+  const { data: currentUserVendor } = useSWR(user && user.role === 'vendor' ? `/store/vendor/${user.id}/` : null, fetcher);
   const { cart, addItem, updateItem, removeItem, clear, total } = useCart();
 
+  const isVendorPreviewingOwnStore = user && user.role === 'vendor' && currentUserVendor && currentUserVendor.id === vendorIdNumber;
+
+  // Debug: log vendor payload when it updates
+  if (vendor) {
+    console.debug('StorePage.vendor data', vendorId, vendor);
+  }
+
   const addToCart = (product: any) => {
-    if (!user) {
-      router.push('/login');
-      return;
-    }
-    if (!vendorIdNumber) return;
-    addItem({ vendorId: vendorIdNumber, productId: product.id, name: product.name, price: Number(product.price), quantity: 1 });
+    if (!vendorIdNumber || isVendorPreviewingOwnStore) return;
+    addItem({
+      vendorId: vendorIdNumber,
+      productId: product.id,
+      productName: product.name,
+      productPrice: Number(product.price),
+      quantity: 1,
+      image: product.image_url || null,
+    });
   };
 
   const currentItems = useMemo(() => {
@@ -34,6 +81,11 @@ export default function StorePage() {
   return (
     <Layout title={vendor?.shop_name || 'Store'}>
       <div className="space-y-6">
+        {isVendorPreviewingOwnStore && (
+          <section className="rounded-3xl bg-amber-50 border-2 border-amber-300 p-4 shadow-sm">
+            <p className="text-sm font-semibold text-amber-900">👀 Preview Mode — You are viewing your own store. Customers will see this page.</p>
+          </section>
+        )}
         <section className="rounded-3xl bg-white shadow-sm overflow-hidden">
           {vendor?.banner_image_url ? (
             <div className="h-52 w-full overflow-hidden bg-slate-100">
@@ -63,7 +115,7 @@ export default function StorePage() {
                 <div className="mt-4 flex flex-wrap gap-3 text-sm text-slate-500">
                   {vendor?.phone_number ? <span>📞 {vendor.phone_number}</span> : null}
                   {vendor?.address ? <span>📍 {vendor.address}</span> : null}
-                  {vendor?.business_hours ? <span>⏱ {vendor.business_hours}</span> : null}
+                  {vendor?.business_hours ? <span>⏱ Open: {formatBusinessHours(vendor.business_hours)}</span> : null}
                 </div>
               </>
             )}
@@ -97,7 +149,13 @@ export default function StorePage() {
                   <p className="mt-2 text-slate-500">{product.description}</p>
                   <div className="mt-4 flex items-center justify-between gap-3">
                     <span className="text-lg font-semibold">฿{product.price}</span>
-                    <button onClick={() => addToCart(product)} className="rounded-2xl bg-sky-600 px-3 py-2 text-white">Add</button>
+                    <button 
+                      onClick={() => addToCart(product)} 
+                      disabled={isVendorPreviewingOwnStore}
+                      className={`rounded-2xl px-3 py-2 text-white ${isVendorPreviewingOwnStore ? 'bg-slate-400 cursor-not-allowed' : 'bg-sky-600 hover:bg-sky-700'}`}
+                    >
+                      {isVendorPreviewingOwnStore ? 'Preview' : 'Add'}
+                    </button>
                   </div>
                   <p className="mt-3 text-sm text-slate-500">{product.available ? `In stock: ${product.stock_quantity}` : 'Unavailable'}</p>
                 </article>
@@ -106,39 +164,6 @@ export default function StorePage() {
           )}
         </section>
 
-        <section className="rounded-3xl bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xl font-semibold">Cart</h3>
-            <button onClick={() => router.push('/cart')} className="text-sm text-sky-600 hover:underline">View cart</button>
-          </div>
-          {currentItems.length === 0 ? (
-            <p className="mt-3 text-slate-500">Your cart is empty. Add items to continue.</p>
-          ) : (
-            <div className="mt-4 space-y-3">
-              {currentItems.map((item) => (
-                <div key={item.productId} className="flex items-center justify-between rounded-2xl border border-slate-200 p-4">
-                  <div>
-                    <p className="font-semibold">{item.name}</p>
-                    <p className="text-sm text-slate-500">Qty: {item.quantity}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-semibold">฿{item.price * item.quantity}</span>
-                    <button onClick={() => removeItem(item.productId)} className="rounded-full bg-rose-100 px-3 py-1 text-sm text-rose-700">Remove</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          {currentItems.length > 0 ? (
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm text-slate-500">Order total</p>
-                <p className="text-2xl font-semibold">฿{total.toFixed(2)}</p>
-              </div>
-              <button onClick={() => router.push('/cart')} className="rounded-2xl bg-sky-600 px-5 py-3 text-white hover:bg-sky-700">Checkout</button>
-            </div>
-          ) : null}
-        </section>
       </div>
     </Layout>
   );

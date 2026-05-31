@@ -50,29 +50,62 @@ export const parseApiError = (error: unknown) => {
     return { message, fields };
   }
 
+  const status = error.response?.status;
+  const requestUrl = error.config?.url || '';
+
+  if (status === 401) {
+    return {
+      message: requestUrl.includes('/auth/account/change-password/')
+        ? 'You must be logged in to change your password.'
+        : 'Your session has expired. Please log in again.',
+      fields,
+    };
+  }
+
   const data = error.response?.data;
   if (!data) {
     return { message: error.message || message, fields };
   }
 
   if (typeof data === 'string') {
-    return { message: data, fields };
+    const text = data.trim();
+    if (text.startsWith('<!DOCTYPE html>') || text.startsWith('<html') || text.includes('<html')) {
+      return { message: 'A server error occurred. Please try again later.', fields };
+    }
+    return { message: text, fields };
   }
 
-  if (typeof data === 'object') {
+  if (typeof data === 'object' && data !== null) {
+    if (typeof data.message === 'string') {
+      message = data.message;
+    }
+    if (typeof data.detail === 'string') {
+      if (data.detail.trim().startsWith('<!DOCTYPE html>') || data.detail.trim().startsWith('<html') || data.detail.trim().includes('<html')) {
+        return { message: 'A server error occurred. Please try again later.', fields };
+      }
+      if (!message) {
+        message = data.detail;
+      }
+    }
+
     for (const [key, value] of Object.entries(data)) {
+      if (key === 'message' || key === 'detail' || key === 'success') {
+        continue;
+      }
       const text = formatApiFieldValue(value);
       if (text) {
         fields[key] = text;
       }
     }
 
-    if (fields.detail) {
-      message = fields.detail;
-    } else if (fields.non_field_errors) {
-      message = fields.non_field_errors;
-    } else if (Object.keys(fields).length) {
-      message = Object.values(fields).join(' ');
+    if (!message) {
+      if (fields.detail) {
+        message = fields.detail;
+      } else if (fields.non_field_errors) {
+        message = fields.non_field_errors;
+      } else if (Object.keys(fields).length) {
+        message = Object.values(fields).join(' ');
+      }
     }
 
     return { message, fields };

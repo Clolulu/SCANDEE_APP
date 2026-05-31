@@ -11,11 +11,14 @@ const fetcher = (url: string) => api.get(url).then((r) => r.data);
 export default function VendorQR() {
   const router = useRouter();
   const { user } = useAuth();
-  const userId = user?.id;
-  const { data: profile } = useSWR(userId ? `/store/vendor/${userId}/` : null, fetcher);
+  const { data: profile } = useSWR(user ? '/store/vendor/me/' : null, fetcher);
   const [copied, setCopied] = useState(false);
 
-  const storeUrl = profile ? `${typeof window !== 'undefined' ? window.location.origin : ''}/store/${profile.id}` : '';
+  const storeUrl = profile
+    ? typeof window !== 'undefined'
+      ? new URL(profile.qr_code || `/store/${profile.id}`, window.location.origin).toString()
+      : ''
+    : '';
   const qrUrl = profile ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(storeUrl)}` : '';
 
   const handleCopyUrl = () => {

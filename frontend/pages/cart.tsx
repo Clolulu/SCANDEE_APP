@@ -2,7 +2,7 @@ import { useRouter } from 'next/router';
 import { Layout } from '../components/Layout';
 import { useCart } from '../lib/cart';
 import { useAuth } from '../lib/useAuth';
-import { api } from '../lib/api';
+import { api, parseApiError } from '../lib/api';
 import { useState } from 'react';
 
 export default function CartPage() {
@@ -38,6 +38,14 @@ export default function CartPage() {
       setError('Your cart is empty.');
       return;
     }
+    if (cart.items.some((item) => item.quantity <= 0)) {
+      setError('Cart contains invalid item quantities.');
+      return;
+    }
+    if (cart.items.some((item) => !item.productId)) {
+      setError('Cart contains invalid product data.');
+      return;
+    }
 
     const payload = {
       vendor: cart.vendorId,
@@ -46,13 +54,23 @@ export default function CartPage() {
 
     try {
       setLoading(true);
+      console.log('Creating order payload', payload);
       const res = await api.post('/store/orders/', payload);
       clear();
       const orderId = res.data.id;
-      router.push(`/orders/${orderId}`);
+      const pickupPin = res.data.pickup_pin;
+      router.push({
+        pathname: `/orders/${orderId}`,
+        query: pickupPin ? { pickup_pin: pickupPin } : {},
+      });
     } catch (err: any) {
-      console.error(err);
-      setError(err?.response?.data?.detail || 'Unable to create order.');
+      console.error('Order create failed', err?.response?.data || err);
+      const apiError = parseApiError(err);
+      if (err?.response?.status === 500) {
+        setError('Server error while creating order. ' + apiError.message);
+      } else {
+        setError(apiError.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -68,18 +86,25 @@ export default function CartPage() {
           ) : (
             <div className="mt-4 space-y-3">
               {cart.items.map((item) => (
-                <div key={item.productId} className="flex items-center justify-between rounded-2xl border border-slate-200 p-4">
-                  <div>
-                    <p className="font-semibold">{item.name}</p>
-                    <p className="text-sm text-slate-500">฿{item.price.toFixed(2)}</p>
-                    <div className="mt-2 flex items-center gap-2">
-                      <button onClick={() => handleQuantity(item.productId, item.quantity - 1)} className="rounded px-2 py-1 bg-slate-100">-</button>
-                      <span className="px-2">{item.quantity}</span>
-                      <button onClick={() => handleQuantity(item.productId, item.quantity + 1)} className="rounded px-2 py-1 bg-slate-100">+</button>
+                <div key={item.productId} className="flex items-center justify-between rounded-2xl border border-slate-200 p-4 gap-4">
+                  <div className="flex items-center gap-4">
+                    {item.image ? (
+                      <img src={item.image} alt={item.productName} className="h-20 w-20 rounded-2xl object-cover" />
+                    ) : (
+                      <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">No image</div>
+                    )}
+                    <div>
+                      <p className="font-semibold">{item.productName}</p>
+                      <p className="text-sm text-slate-500">฿{item.productPrice.toFixed(2)}</p>
+                      <div className="mt-2 flex items-center gap-2">
+                        <button onClick={() => handleQuantity(item.productId, item.quantity - 1)} className="rounded px-2 py-1 bg-slate-100">-</button>
+                        <span className="px-2">{item.quantity}</span>
+                        <button onClick={() => handleQuantity(item.productId, item.quantity + 1)} className="rounded px-2 py-1 bg-slate-100">+</button>
+                      </div>
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-2">
-                    <span className="font-semibold">฿{(item.price * item.quantity).toFixed(2)}</span>
+                    <span className="font-semibold">฿{(item.productPrice * item.quantity).toFixed(2)}</span>
                     <button onClick={() => removeItem(item.productId)} className="text-sm text-rose-600">Remove</button>
                   </div>
                 </div>
@@ -104,8 +129,18 @@ export default function CartPage() {
                 <p className="text-2xl font-semibold">฿{chargeAmount.toFixed(2)}</p>
               </div>
             </div>
-            <div className="flex items-center justify-between">
-              <button onClick={() => clear()} className="rounded-2xl bg-rose-100 px-4 py-2 text-rose-700">Clear</button>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <button onClick={() => clear()} className="rounded-2xl bg-rose-100 px-4 py-2 text-rose-700">Clear</button>
+                {cart.vendorId ? (
+                  <button
+                    onClick={() => router.push(`/store/${cart.vendorId}`)}
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-slate-700 hover:bg-slate-50"
+                  >
+                    Continue shopping
+                  </button>
+                ) : null}
+              </div>
               <button onClick={handleCheckout} disabled={loading || cart.items.length === 0} className="rounded-2xl bg-sky-600 px-5 py-3 text-white hover:bg-sky-700">{loading ? 'Processing...' : 'Checkout'}</button>
             </div>
           </div>

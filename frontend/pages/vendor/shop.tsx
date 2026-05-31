@@ -1,4 +1,4 @@
-import useSWR from 'swr';
+import useSWR, { mutate as globalMutate } from 'swr';
 import { FormEvent, useState, useEffect } from 'react';
 import { api, parseApiError } from '../../lib/api';
 import { Layout } from '../../components/Layout';
@@ -9,7 +9,7 @@ const fetcher = (url: string) => api.get(url).then((res) => res.data);
 
 export default function VendorShopPage() {
   const { user } = useAuth();
-  const { data: vendor, error, mutate } = useSWR(user ? '/vendor/me/' : null, fetcher);
+  const { data: vendor, error, mutate } = useSWR(user ? '/store/vendor/me/' : null, fetcher);
 
   const [shopName, setShopName] = useState('');
   const [description, setDescription] = useState('');
@@ -17,6 +17,8 @@ export default function VendorShopPage() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [address, setAddress] = useState('');
   const [businessHours, setBusinessHours] = useState('');
+  const [openingTime, setOpeningTime] = useState('');
+  const [closingTime, setClosingTime] = useState('');
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -39,6 +41,18 @@ export default function VendorShopPage() {
   }, [vendor]);
 
   useEffect(() => {
+    if (!vendor?.business_hours) return;
+    const parsed = parseBusinessHours(vendor.business_hours);
+    if (parsed) {
+      setOpeningTime(parsed.opening);
+      setClosingTime(parsed.closing);
+    } else {
+      setOpeningTime('');
+      setClosingTime('');
+    }
+  }, [vendor?.business_hours]);
+
+  useEffect(() => {
     if (!logoFile) return;
     const url = URL.createObjectURL(logoFile);
     setLogoPreview(url);
@@ -58,14 +72,31 @@ export default function VendorShopPage() {
     setErrorMessage(null);
     setMessage(null);
 
+    if (openingTime && closingTime && closingTime <= openingTime) {
+      setErrorMessage('Closing time must be later than opening time.');
+      setSaving(false);
+      return;
+    }
+
     try {
+      // Debug: log payload and file info
+      console.debug('VendorShop.submit payload', {
+        shopName,
+        description,
+        category,
+        phoneNumber,
+        address,
+        businessHours: openingTime && closingTime ? `${openingTime}-${closingTime}` : businessHours,
+        logoFileName: logoFile?.name || null,
+        bannerFileName: bannerFile?.name || null,
+      });
       const formData = new FormData();
       formData.append('shop_name', shopName);
       formData.append('description', description);
       formData.append('category', category);
       formData.append('phone_number', phoneNumber);
       formData.append('address', address);
-      formData.append('business_hours', businessHours);
+      formData.append('business_hours', openingTime && closingTime ? `${openingTime}-${closingTime}` : businessHours);
 
       if (logoFile) {
         formData.append('logo_image', logoFile);
@@ -74,8 +105,22 @@ export default function VendorShopPage() {
         formData.append('banner_image', bannerFile);
       }
 
-      const response = await api.patch('/vendor/me/', formData);
+      const response = await api.patch('/store/vendor/me/', formData);
+      console.debug('VendorShop.submit response', response.status, response.data);
       mutate(response.data, false);
+      // Update public store cache keys so other pages reflect changes immediately
+      try {
+        const vendorProfileId = response.data.id;
+        const vendorUserId = response.data.vendor_id || response.data.vendorId || response.data.user_id;
+        if (vendorProfileId) {
+          globalMutate(`/store/vendor/${vendorProfileId}/`, response.data, false);
+        }
+        if (vendorUserId) {
+          globalMutate(`/store/vendor/${vendorUserId}/`, response.data, false);
+        }
+      } catch (e) {
+        console.debug('VendorShop.mutate public cache failed', e);
+      }
       setMessage('Shop profile updated successfully.');
     } catch (err) {
       const parsed = parseApiError(err);
@@ -83,6 +128,52 @@ export default function VendorShopPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const parseTimeValue = (text: string) => {
+    const normalized = text.trim().toUpperCase();
+    const ampmMatch = normalized.match(/^([0-9]{1,2}:[0-9]{2})\s*(AM|PM)$/);
+    if (ampmMatch) {
+      const [, time, period] = ampmMatch;
+      const [hour, minute] = time.split(':').map(Number);
+      const hour24 = period === 'PM' ? (hour % 12) + 12 : hour % 12;
+      return `${hour24.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+    }
+
+    const twentyFourMatch = normalized.match(/^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/);
+    if (twentyFourMatch) {
+      const [, hour, minute] = twentyFourMatch;
+      return `${hour.padStart(2, '0')}:${minute}`;
+    }
+
+    return null;
+  };
+
+  const parseBusinessHours = (value: string) => {
+    const parts = value.split('-').map((part) => part.trim());
+    if (parts.length !== 2) {
+      return null;
+    }
+
+    const opening = parseTimeValue(parts[0]);
+    const closing = parseTimeValue(parts[1]);
+    if (!opening || !closing) {
+      return null;
+    }
+
+    return { opening, closing };
+  };
+
+  const formatBusinessHours = (value: string) => {
+    const parsed = parseBusinessHours(value);
+    if (!parsed) {
+      return value;
+    }
+    const [openHour, openMinute] = parsed.opening.split(':');
+    const [closeHour, closeMinute] = parsed.closing.split(':');
+    const openDate = new Date(1970, 0, 1, Number(openHour), Number(openMinute));
+    const closeDate = new Date(1970, 0, 1, Number(closeHour), Number(closeMinute));
+    return `${openDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} - ${closeDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
   };
 
   return (
@@ -136,14 +227,35 @@ export default function VendorShopPage() {
                   />
                 </label>
 
-                <label className="block lg:col-span-2">
-                  <span className="text-sm font-medium text-slate-700">Business hours</span>
-                  <input
-                    value={businessHours}
-                    onChange={(e) => setBusinessHours(e.target.value)}
-                    className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 focus:border-sky-500 focus:outline-none"
-                  />
-                </label>
+                <div className="lg:col-span-2 grid gap-4 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="text-sm font-medium text-slate-700">Opening time</span>
+                    <input
+                      type="time"
+                      value={openingTime}
+                      onChange={(e) => setOpeningTime(e.target.value)}
+                      className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 focus:border-sky-500 focus:outline-none"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-sm font-medium text-slate-700">Closing time</span>
+                    <input
+                      type="time"
+                      value={closingTime}
+                      onChange={(e) => setClosingTime(e.target.value)}
+                      className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 focus:border-sky-500 focus:outline-none"
+                    />
+                  </label>
+                </div>
+                <div className="lg:col-span-2 text-sm text-slate-500">
+                  {openingTime && closingTime ? (
+                    <p>Saving schedule: {formatBusinessHours(`${openingTime}-${closingTime}`)}</p>
+                  ) : businessHours ? (
+                    <p>Current schedule: {formatBusinessHours(businessHours)}</p>
+                  ) : (
+                    <p>Use the time pickers to save your business hours.</p>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-6">

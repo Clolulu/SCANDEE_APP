@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import VendorProfile, Product, Order, OrderItem
+from .models import VendorProfile, Product, Order, OrderItem, Payout
 
 @admin.register(VendorProfile)
 class VendorProfileAdmin(admin.ModelAdmin):
@@ -20,3 +20,9 @@ class OrderAdmin(admin.ModelAdmin):
     list_display = ('id', 'tourist', 'vendor', 'order_total', 'service_fee', 'charge_amount', 'gateway_fee', 'vendor_payout', 'platform_profit', 'payment_status', 'order_status', 'created_at')
     inlines = [OrderItemInline]
     list_filter = ('payment_status', 'order_status')
+
+@admin.register(Payout)
+class PayoutAdmin(admin.ModelAdmin):
+    list_display = ('id', 'vendor', 'amount', 'status', 'payout_method', 'scheduled_at', 'processed_at', 'created_at')
+    list_filter = ('status', 'payout_method')
+    search_fields = ('vendor__shop_name', 'vendor__user__email')
