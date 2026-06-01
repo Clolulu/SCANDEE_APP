@@ -15,23 +15,6 @@ export default function CustomerHome() {
   const router = useRouter();
   const { user } = useAuth();
   const [showScanner, setShowScanner] = useState(false);
-  const [showQrInput, setShowQrInput] = useState(false);
-  const [qrInput, setQrInput] = useState('');
-  const [error, setError] = useState('');
-
-  const handleQrScan = () => {
-    setError('');
-    if (!qrInput.trim()) {
-      setError('Please enter a vendor ID or scan a QR code');
-      return;
-    }
-    const vendorId = qrInput.trim();
-    if (!/^\d+$/.test(vendorId)) {
-      setError('Invalid vendor ID. Please enter a number.');
-      return;
-    }
-    router.push(`/store/${vendorId}`);
-  };
 
   return (
     <ProtectedPage requiredRole="tourist">
@@ -45,7 +28,7 @@ export default function CustomerHome() {
           <div className="grid gap-4 sm:grid-cols-2">
             <section className="rounded-3xl bg-sky-50 p-6 shadow-sm">
               <h3 className="text-xl font-semibold text-sky-900">Scan QR Code</h3>
-              <p className="mt-2 text-sm text-sky-700">Use your camera to scan a vendor QR code or enter a vendor ID.</p>
+              <p className="mt-2 text-sm text-sky-700">Use your camera to scan a vendor QR code to browse their menu and place an order.</p>
               <div className="mt-4 space-y-3">
                 <button
                   onClick={() => setShowScanner(true)}
@@ -53,34 +36,7 @@ export default function CustomerHome() {
                 >
                   📷 Open Camera Scanner
                 </button>
-                <button
-                  onClick={() => setShowQrInput(!showQrInput)}
-                  className="w-full rounded-2xl border border-sky-600 px-5 py-2 text-sky-600 hover:bg-sky-50"
-                >
-                  {showQrInput ? 'Hide Manual Entry' : 'Or Enter Vendor ID'}
-                </button>
               </div>
-              {showQrInput && (
-                <div className="mt-4 space-y-3">
-                  <input
-                    type="text"
-                    placeholder="Enter vendor ID (e.g., 1)"
-                    value={qrInput}
-                    onChange={(e) => {
-                      setQrInput(e.target.value);
-                      setError('');
-                    }}
-                    className="w-full rounded border border-sky-200 p-3"
-                  />
-                  <button
-                    onClick={handleQrScan}
-                    className="w-full rounded-2xl bg-sky-600 px-5 py-2 text-white hover:bg-sky-700"
-                  >
-                    Go to Store
-                  </button>
-                  {error && <p className="text-sm text-rose-600">{error}</p>}
-                </div>
-              )}
             </section>
 
             <Link href="/orders" className="rounded-3xl bg-slate-100 p-6 shadow-sm hover:bg-slate-200 transition">
@@ -95,7 +51,6 @@ export default function CustomerHome() {
             <ul className="mt-3 space-y-2 text-sm text-slate-600">
               <li>• Ask the vendor to show you their QR code</li>
               <li>• Click "Open Camera Scanner" to scan with your phone camera</li>
-              <li>• Or enter their vendor ID manually</li>
               <li>• Browse their menu and add items to your cart</li>
               <li>• Complete payment and receive a pickup PIN</li>
               <li>• Present your PIN to the vendor to collect your order</li>

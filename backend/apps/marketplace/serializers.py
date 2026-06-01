@@ -202,6 +202,8 @@ class OrderSerializer(serializers.ModelSerializer):
     pickup_pin = serializers.CharField(source='pin_code', read_only=True)
     prepared_at = serializers.DateTimeField(read_only=True)
     completed_at = serializers.DateTimeField(read_only=True)
+    is_completed = serializers.SerializerMethodField()
+    is_current = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -221,6 +223,8 @@ class OrderSerializer(serializers.ModelSerializer):
             'pickup_pin',
             'prepared_at',
             'completed_at',
+            'is_completed',
+            'is_current',
             'items',
             'created_at',
         )
@@ -239,6 +243,12 @@ class OrderSerializer(serializers.ModelSerializer):
             'pin_code',
             'confirmation_pin_hash',
         )
+
+    def get_is_completed(self, obj):
+        return obj.is_completed
+
+    def get_is_current(self, obj):
+        return obj.is_current
 
     def validate(self, attrs):
         vendor = attrs.get('vendor')

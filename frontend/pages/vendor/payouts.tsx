@@ -37,7 +37,11 @@ export default function VendorPayoutsPage() {
               <div className="text-slate-500">No payouts have been made yet.</div>
             ) : (
               <div className="space-y-4">
-                {payouts.map((payout: any) => (
+                {payouts.slice().sort((a: any, b: any) => {
+                  const aDate = a.processed_at || a.created_at;
+                  const bDate = b.processed_at || b.created_at;
+                  return new Date(bDate).getTime() - new Date(aDate).getTime();
+                }).map((payout: any) => (
                   <article key={payout.id} className="rounded-3xl border border-slate-200 p-4 shadow-sm">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                       <div>

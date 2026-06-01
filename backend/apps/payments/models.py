@@ -11,3 +11,5 @@ class Transaction(models.Model):
 
     def __str__(self):
         return f'Transaction {self.omise_charge_id} for order {self.order_id}'
+    class Meta:
+        ordering = ['-created_at']

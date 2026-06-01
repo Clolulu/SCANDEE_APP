@@ -113,14 +113,14 @@ class ProductViewSet(viewsets.ModelViewSet):
         super().check_object_permissions(request, obj)
 
 class OrderViewSet(viewsets.ModelViewSet):
-    queryset = Order.objects.select_related('tourist', 'vendor').prefetch_related('items').all()
+    queryset = Order.objects.select_related('tourist', 'vendor').prefetch_related('items').all().order_by('-created_at')
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
         if user.role == 'vendor':
-            return self.queryset.filter(vendor__user=user)
+            return self.queryset.filter(vendor__user=user).order_by('-created_at')
         return self.queryset.filter(tourist=user)
 
     def create(self, request, *args, **kwargs):
@@ -213,7 +213,7 @@ class MyOrdersView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Order.objects.select_related('tourist', 'vendor').prefetch_related('items').filter(tourist=self.request.user)
+        return Order.objects.select_related('tourist', 'vendor').prefetch_related('items').filter(tourist=self.request.user).order_by('-created_at')
 
 
 class VendorOrdersView(generics.ListAPIView):
@@ -221,7 +221,7 @@ class VendorOrdersView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated, IsVendor]
 
     def get_queryset(self):
-        return Order.objects.select_related('tourist', 'vendor').prefetch_related('items').filter(vendor__user=self.request.user)
+        return Order.objects.select_related('tourist', 'vendor').prefetch_related('items').filter(vendor__user=self.request.user).order_by('-created_at')
 
 
 class VerifyPinView(APIView):
@@ -241,7 +241,8 @@ class VerifyPinView(APIView):
         return Response({'detail': 'Invalid PIN'}, status=status.HTTP_400_BAD_REQUEST)
 
 class PayoutViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Payout.objects.select_related('vendor').order_by('-created_at')
+    # Prefer ordering by processed_at (actual payout date) then created_at as a fallback
+    queryset = Payout.objects.select_related('vendor').order_by('-processed_at', '-created_at')
     serializer_class = PayoutSerializer
     permission_classes = [permissions.IsAuthenticated]
 

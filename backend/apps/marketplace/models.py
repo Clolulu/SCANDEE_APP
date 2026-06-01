@@ -196,8 +196,21 @@ class Order(models.Model):
             return False
         return check_password(raw_pin, self.confirmation_pin_hash)
 
+    @property
+    def is_completed(self):
+        """Check if order is in a terminal/completed state"""
+        completed_statuses = ['COMPLETED', 'completed', 'FAILED', 'failed', 'CANCELLED', 'cancelled']
+        return self.order_status in completed_statuses
+
+    @property
+    def is_current(self):
+        """Check if order is active/in-progress"""
+        return not self.is_completed
+
     def __str__(self):
         return f'Order #{self.id} from {self.tourist.email}'
+    class Meta:
+        ordering = ['-created_at']
 
 class Payout(models.Model):
     STATUS_CHOICES = (
@@ -232,6 +245,8 @@ class Payout(models.Model):
 
     def __str__(self):
         return f'Payout #{self.id} to {self.vendor.shop_name} for {self.amount}'
+    class Meta:
+        ordering = ['-processed_at', '-created_at']
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')

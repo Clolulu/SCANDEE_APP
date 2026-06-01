@@ -1,83 +1,85 @@
 import Link from 'next/link';
 import useSWR from 'swr';
-import { Layout } from '../components/Layout';
-import { ProtectedPage } from '../components/ProtectedPage';
-import { api } from '../lib/api';
-import { useAuth } from '../lib/useAuth';
+import { Layout } from '../../components/Layout';
+import { ProtectedPage } from '../../components/ProtectedPage';
+import { api } from '../../lib/api';
+import { useAuth } from '../../lib/useAuth';
 
 const fetcher = (url: string) => api.get(url).then((res) => res.data);
 
-export default function OrderListPage() {
+export default function OrderHistoryPage() {
   const { loading } = useAuth();
   const { data, error } = useSWR(!loading ? '/store/orders/' : null, fetcher, {
-    refreshInterval: 5000,
+    refreshInterval: 30000, // Refresh less frequently for history
   });
 
-  // Separate orders into current only
-  const currentOrders = data?.filter((order: any) => order.is_current) || [];
-
-  // Sort by created_at (newest first)
-  const sortedCurrentOrders = currentOrders.slice().sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  // Filter only completed orders
+  const completedOrders = data?.filter((order: any) => order.is_completed) || [];
+  const sortedCompletedOrders = completedOrders.slice().sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   const getStatusColor = (status: string) => {
     const statusUpper = status.toUpperCase();
     if (statusUpper === 'COMPLETED') return 'bg-emerald-100 text-emerald-800';
-    if (statusUpper === 'READY_FOR_PICKUP') return 'bg-sky-100 text-sky-800';
-    if (statusUpper === 'PREPARING') return 'bg-orange-100 text-orange-800';
-    if (statusUpper === 'PAID') return 'bg-blue-100 text-blue-800';
-    if (statusUpper === 'PENDING_PAYMENT') return 'bg-amber-100 text-amber-800';
-    if (statusUpper === 'FAILED' || statusUpper === 'CANCELLED') return 'bg-rose-100 text-rose-800';
+    if (statusUpper === 'FAILED') return 'bg-rose-100 text-rose-800';
+    if (statusUpper === 'CANCELLED') return 'bg-slate-100 text-slate-800';
     return 'bg-slate-100 text-slate-800';
   };
 
   return (
     <ProtectedPage requiredRole="tourist">
-      <Layout title="My Orders">
+      <Layout title="Order History">
         <div className="space-y-6">
           {/* Header */}
           <section className="rounded-3xl bg-white p-6 shadow-sm">
-            <h2 className="text-2xl font-semibold">My Orders</h2>
-            <p className="mt-2 text-slate-600">Track active orders and payment status in real-time.</p>
+            <h2 className="text-2xl font-semibold">Order History</h2>
+            <p className="mt-2 text-slate-600">Review your past orders and transaction records.</p>
           </section>
 
           {/* Navigation Tabs */}
           <section className="flex gap-2 border-b border-slate-200 bg-white rounded-t-3xl px-6 pt-6">
             <Link
               href="/orders"
-              className="px-4 py-3 text-blue-600 font-medium border-b-2 border-blue-600 transition"
+              className="px-4 py-3 text-slate-600 hover:text-slate-900 font-medium border-b-2 border-transparent hover:border-slate-300 transition"
             >
               Active Orders
             </Link>
             <Link
               href="/orders/history"
-              className="px-4 py-3 text-slate-600 hover:text-slate-900 font-medium border-b-2 border-transparent hover:border-slate-300 transition"
+              className="px-4 py-3 text-blue-600 font-medium border-b-2 border-blue-600 transition"
             >
               Order History
             </Link>
           </section>
 
           {error && (
-            <div className="rounded-3xl bg-rose-50 p-6 text-rose-700 shadow-sm">Unable to load your orders.</div>
+            <div className="rounded-3xl bg-rose-50 p-6 text-rose-700 shadow-sm">Unable to load your order history.</div>
           )}
-          {!data && <div className="rounded-3xl bg-white p-6 shadow-sm">Loading orders…</div>}
+          {!data && <div className="rounded-3xl bg-white p-6 shadow-sm">Loading order history…</div>}
 
-          {/* Active Orders Section */}
+          {/* Order History Section */}
           {data && (
             <>
-              {sortedCurrentOrders.length === 0 ? (
+              {sortedCompletedOrders.length === 0 ? (
                 <div className="rounded-3xl bg-slate-50 p-6 text-slate-600 shadow-sm">
-                  <p>You have no active orders.</p>
-                  <p className="text-sm mt-2">Browse vendors to place your first order or check your <Link href="/orders/history" className="text-blue-600 hover:text-blue-700 font-medium">order history</Link>.</p>
+                  <p>No completed orders yet.</p>
+                  <Link href="/orders" className="mt-3 inline-block text-blue-600 hover:text-blue-700 font-medium">
+                    View active orders →
+                  </Link>
                 </div>
               ) : (
                 <div className="grid gap-4">
-                  {sortedCurrentOrders.map((order: any) => (
-                    <Link key={order.id} href={`/orders/${order.id}`} className="rounded-3xl bg-white p-6 shadow-sm hover:border-sky-300 hover:shadow-md transition">
+                  {sortedCompletedOrders.map((order: any) => (
+                    <Link key={order.id} href={`/orders/${order.id}`} className="rounded-3xl bg-white p-6 shadow-sm hover:border-emerald-300 hover:shadow-md transition opacity-85">
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex-1">
                           <p className="font-semibold text-lg">Order #{order.id}</p>
                           <p className="text-sm text-slate-500">{order.vendor_name || 'Vendor'}</p>
                           <p className="text-sm text-slate-500">{new Date(order.created_at).toLocaleString()}</p>
+                          {order.completed_at && (
+                            <p className="text-xs text-emerald-600 mt-1">
+                              Completed: {new Date(order.completed_at).toLocaleString()}
+                            </p>
+                          )}
                         </div>
                         <div className="text-right">
                           <p className="font-semibold text-lg">฿{Number(order.order_total).toFixed(2)}</p>
